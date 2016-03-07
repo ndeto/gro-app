@@ -1,8 +1,0 @@
-"""%Y-%m-%d %Y-%m-%d"""
-start_date = ""
-end_date = ""
-database_name = "groapp"
-database_host = "localhost"
-database_user = "postgres"
-database_pass = "spiderpig"
-database_port = "5432"

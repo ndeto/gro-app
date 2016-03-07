@@ -32,8 +32,8 @@ def begin_nass_harvest(database_host, database_name, database_user, database_pas
     config.database_user = database_user
     config.database_password = database_password"""
 
-    create_db(database_user, database_host, database_name, database_password, port)
     data = make_request(end_date, start_date)
+    create_db(database_user, database_host, database_name, database_password, port)
     store_data(data, database_user, database_host, database_name, database_password, port)
 
 
@@ -90,22 +90,36 @@ def create_db(database_user, database_host, database_name, database_password, po
 ####Request the data and store in a local file
 def make_request(end_date, start_date):
     api_key_ = 'AD726B5F-3047-34A2-9104-30AB0AB714EC'
-    start = start_date[0:4]
-    end = end_date[0:4]
-    print('tuko sawa')
+
+    start_day =""
+    end_day =""
+
+    start_month = start_date[5:7]
+    end_month = end_date[5:7]
+
+    start_year = start_date[0:4]
+    end_year = end_date[0:4]
+
+
     #     Check Count
     count = requests.get(
-        'http://quickstats.nass.usda.gov/api/get_counts/?key=' + api_key_ + '&sector_desc=CROPS&year__GE=' + start + '&year__LE=' + end)
+        'http://quickstats.nass.usda.gov/api/get_counts/?key='+api_key_+'+&sector_desc=CROPS&year__GE='+start_year+'&year__LE='+end_year+'freq_desc=MONTHLY&begin_code='+start_month)
     rows = count.json()
-
-    if int(rows['count']) <= 50000:
-        print("Rows Found" + rows['count'])
+    if int(rows['count'])== 0:
+        print("No matching records within that Date")
+        exit(0)
+    elif int(rows['count']) <= 50000:
+        print("Records Found " + rows['count'])
         r = requests.get(
-            'http://quickstats.nass.usda.gov/api/api_GET/?key=' + api_key_ + '&sector_desc=CROPS&year__GE=' + start + '&year__LE=' + end + '&format=JSON')
-        print(r.status_code)
-        with open('data.json', 'w') as outfile:
-            json.dump(r.json(), outfile)
+            'http://quickstats.nass.usda.gov/api/api_GET/?key='+api_key_+'+&sector_desc=CROPS&year__GE='+start_year+'&year__LE='+end_year+'freq_desc=MONTHLY&begin_code='+start_month+'&format=JSON')
 
+        if(int(r.status_code) == 200):
+            with open('data.json', 'w') as outfile:
+                json.dump(r.json(), outfile)
+        else:
+            r.json()
+            print ('Error: status_code '+ str(r.status_code))
+            exit(0)
     else:
         print("Decrease your Date Range, your request returned " + rows['count'] + " records")
         exit(0)
@@ -169,7 +183,7 @@ def main(argv):
     port = 5432
     database_user = 'postgres'
     database_password = 'spiderpig'
-    start_date = '2015-1-1'
+    start_date = '2015-06-01'
     end_date = '2015-12-31'
 
     for opt, arg in opts:
