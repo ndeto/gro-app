@@ -9,14 +9,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine.url import URL
 
 
-
 def begin_nass_harvest(database_host, database_name, database_user, database_password,
                        port, start_date, end_date):
-#    print("\nThis is a starter script for the Gro Hackathon's NASS harvest. It meets the API " \
-#          "requirements defined for the hackathon\n\n")
+    #    print("\nThis is a starter script for the Gro Hackathon's NASS harvest. It meets the API " \
+    #          "requirements defined for the hackathon\n\n")
 
     print("Run 'python harvest.py -h' for help\n\n")
-#    print("Feel free to edit the entirety of this start script\n")
+    #    print("Feel free to edit the entirety of this start script\n")
 
     print("Supplied Args (some default): ")
     print("Database Host: {}".format(database_host))
@@ -34,7 +33,7 @@ def begin_nass_harvest(database_host, database_name, database_user, database_pas
     config.database_password = database_password"""
 
     create_db(database_user, database_host, database_name, database_password, port)
-    data = make_request()
+    data = make_request(end_date, start_date)
     store_data(data, database_user, database_host, database_name, database_password, port)
 
 
@@ -89,17 +88,32 @@ def create_db(database_user, database_host, database_name, database_password, po
 #    print("Table Exists")
 
 ####Request the data and store in a local file
-def make_request():
-    r = requests.get(
-            'http://quickstats.nass.usda.gov/api/api_GET/?key=AD726B5F-3047-34A2-9104-30AB0AB714EC&commodity_desc=CORN&year__GE=2012&state_alpha=VA&format=JSON')
-    with open('data.txt', 'w') as outfile:
-        json.dump(r.json(), outfile)
+def make_request(end_date, start_date):
+    api_key_ = 'AD726B5F-3047-34A2-9104-30AB0AB714EC'
+    start = start_date[0:4]
+    end = end_date[0:4]
+    print('tuko sawa')
+    #     Check Count
+    count = requests.get(
+        'http://quickstats.nass.usda.gov/api/get_counts/?key=' + api_key_ + '&sector_desc=CROPS&year__GE=' + start + '&year__LE=' + end)
+    rows = count.json()
+
+    if int(rows['count']) <= 50000:
+        print("Rows Found" + rows['count'])
+        r = requests.get(
+            'http://quickstats.nass.usda.gov/api/api_GET/?key=' + api_key_ + '&sector_desc=CROPS&year__GE=' + start + '&year__LE=' + end + '&format=JSON')
+        print(r.status_code)
+        with open('data.json', 'w') as outfile:
+            json.dump(r.json(), outfile)
+
+    else:
+        print("Decrease your Date Range, your request returned " + rows['count'] + " records")
+        exit(0)
 
     maindict = json.loads(open('data.json').read())
 
     data = maindict["data"]
     return data
-
 
 ##Store Data in DB
 def store_data(data, database_user, database_host, database_name, database_password, port):
@@ -155,7 +169,7 @@ def main(argv):
     port = 5432
     database_user = 'postgres'
     database_password = 'spiderpig'
-    start_date = '2005-1-1'
+    start_date = '2015-1-1'
     end_date = '2015-12-31'
 
     for opt, arg in opts:
