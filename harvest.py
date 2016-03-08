@@ -26,15 +26,10 @@ def begin_nass_harvest(database_host, database_name, database_user, database_pas
     print("Harvest Start Date: {}".format(start_date))
     print("Harvest End Date: {}\n".format(end_date))
 
-    """config.start_date= start_date
-    config.end_date = end_date
-    config.database_name = database_name
-    config.database_user = database_user
-    config.database_password = database_password"""
-
     data = make_request(end_date, start_date)
     create_db(database_user, database_host, database_name, database_password, port)
     store_data(data, database_user, database_host, database_name, database_password, port)
+    fun_facts(database_user, database_host, database_name, database_password, port)
 
 
 ###Create the Database and Tables
@@ -72,7 +67,9 @@ def create_db(database_user, database_host, database_name, database_password, po
 
     try:
         cur.execute(
-            "CREATE TABLE IF NOT EXISTS public.fact_data(id SERIAL NOT NULL PRIMARY KEY,domain_desc text, commodity_desc text,statisticcat_desc text,agg_level_desc text,country_name text,state_name text,county_name text,unit_desc text,value text,year integer)")
+            "CREATE TABLE IF NOT EXISTS public.fact_data(id SERIAL NOT NULL PRIMARY KEY,domain_desc text, commodity_desc text,statisticcat_desc text,agg_level_desc text,country_name text,state_name text,county_name text,unit_desc text,value text,year integer);")
+        cur.execute(
+            "CREATE TABLE IF NOT EXISTS public.fun_facts(id SERIAL NOT NULL PRIMARY KEY,Record_count integer,commodity_count INTEGER );")
         conn.commit()
     except psycopg2.OperationalError as e:
         print("Error\n{0}").format(e)
@@ -81,18 +78,12 @@ def create_db(database_user, database_host, database_name, database_password, po
     conn.close()
 
 
-# cur.execute("select exists(select * from information_schema.tables where table_name=%s)", ('fact_data',))
-# if cur.fetchone()[0] == True:
-#    print("Table Doesnt Exist")
-# else:
-#    print("Table Exists")
-
-####Request the data and store in a local file
+##Make Request
 def make_request(end_date, start_date):
     api_key_ = 'AD726B5F-3047-34A2-9104-30AB0AB714EC'
 
-    start_day =""
-    end_day =""
+    start_day = ""
+    end_day = ""
 
     start_month = start_date[5:7]
     end_month = end_date[5:7]
@@ -100,25 +91,24 @@ def make_request(end_date, start_date):
     start_year = start_date[0:4]
     end_year = end_date[0:4]
 
-
     #     Check Count
     count = requests.get(
-        'http://quickstats.nass.usda.gov/api/get_counts/?key='+api_key_+'+&sector_desc=CROPS&year__GE='+start_year+'&year__LE='+end_year+'freq_desc=MONTHLY&begin_code='+start_month)
+        'http://quickstats.nass.usda.gov/api/get_counts/?key=' + api_key_ + '+&sector_desc=CROPS&year__GE=' + start_year + '&year__LE=' + end_year + 'freq_desc=MONTHLY&begin_code=' + start_month)
     rows = count.json()
-    if int(rows['count'])== 0:
+    if int(rows['count']) == 0:
         print("No matching records within that Date")
         exit(0)
     elif int(rows['count']) <= 50000:
         print("Records Found " + rows['count'])
         r = requests.get(
-            'http://quickstats.nass.usda.gov/api/api_GET/?key='+api_key_+'+&sector_desc=CROPS&year__GE='+start_year+'&year__LE='+end_year+'freq_desc=MONTHLY&begin_code='+start_month+'&format=JSON')
+            'http://quickstats.nass.usda.gov/api/api_GET/?key=' + api_key_ + '+&sector_desc=CROPS&year__GE=' + start_year + '&year__LE=' + end_year + 'freq_desc=MONTHLY&begin_code=' + start_month + '&format=JSON')
 
-        if(int(r.status_code) == 200):
+        if (int(r.status_code) == 200):
             with open('data.json', 'w') as outfile:
                 json.dump(r.json(), outfile)
         else:
             r.json()
-            print ('Error: status_code '+ str(r.status_code))
+            print('Error: status_code ' + str(r.status_code))
             exit(0)
     else:
         print("Decrease your Date Range, your request returned " + rows['count'] + " records")
@@ -128,6 +118,7 @@ def make_request(end_date, start_date):
 
     data = maindict["data"]
     return data
+
 
 ##Store Data in DB
 def store_data(data, database_user, database_host, database_name, database_password, port):
@@ -161,12 +152,42 @@ def store_data(data, database_user, database_host, database_name, database_passw
     print("\n")
     conn.commit()
     conn.close()
-    print("Success!")
+    print("Records Stored!")
 
+
+# Store a few facts
+def fun_facts(database_user, database_host, database_name, database_password, port):
+    print('A few fun facts....')
+    conn = psycopg2.connect(database=database_name, user=database_user, password=database_password,
+                            host=database_host,
+                            port=port)
+    cur = conn.cursor()
+
+    cur.execute('SELECT * FROM fact_data')
+
+    conn.commit()
+
+    record_number = cur.rowcount
+
+    cur.execute('SELECT DISTINCT commodity_desc FROM fact_data')
+
+    conn.commit()
+
+    commodity_number = cur.rowcount
+    cur.execute("truncate fun_facts;")
+    cur.execute(
+        '''INSERT INTO fun_facts (record_count,commodity_count)
+            VALUES (%s, %s)''',
+        (record_number, commodity_number))
+    conn.commit()
+    conn.close()
+    print("Success!")
+    exit(0)
 
 # #################################################
 # PUT YOUR CODE ABOVE THIS LINE
 # #################################################
+
 def main(argv):
     try:
         opts, args = getopt.getopt(argv, "h", ["database_host=", "database_name=", "start_date=",
